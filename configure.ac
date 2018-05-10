@@ -1409,6 +1409,76 @@ if test "$want_turbocap" != no; then
 	fi
 fi
 
+# Check for L Data Plane support.
+AC_ARG_WITH([ldp],
+AC_HELP_STRING([--with-ldp@<:@=DIR@:>@],[include L Data Plane support (located in directory DIR, if supplied).  @<:@default=yes, if present@:>@]),
+[
+	if test "$withval" = no
+	then
+		# User explicitly doesn't want LDP
+		want_ldp=no
+	elif test "$withval" = yes
+	then
+		# User wants LDP support but hasn't specified a directory.
+		want_ldp=yes
+	else
+		# User wants LDP support with a specified directory.
+		want_ldp=yes
+		ldp_root=$withval
+	fi
+],[
+	if test "xxx_only" = yes; then
+		# User requested something-else-only pcap, so they don't
+		# want LDP support.
+		want_ldp=no
+	else
+		#
+		# Use LDP API if present, otherwise don't
+		#
+		want_ldp=ifpresent
+	fi
+])
+
+ac_cv_lbl_ldp_api=no
+if test "$want_ldp" != no; then
+
+	AC_MSG_CHECKING(whether LDP is supported)
+
+	save_CFLAGS="$CFLAGS"
+	save_LIBS="$LIBS"
+	if test ! -z "$ldp_root"; then
+		LDP_CFLAGS="-I$ldp_root/ldp -I$ldp_root/misc"
+		LDP_LIBS="-L$ldp_root/ldp"
+		CFLAGS="$CFLAGS $LDP_CFLAGS"
+	fi
+
+	AC_TRY_COMPILE(
+	[
+	    #include <ldp.h>
+	],
+	[
+	],
+	ac_cv_lbl_ldp_api=yes)
+
+	CFLAGS="$save_CFLAGS"
+	if test $ac_cv_lbl_ldp_api = yes; then
+		AC_MSG_RESULT(yes)
+
+		SSRC="$SSRC pcap-ldp.c"
+		V_INCLS="$V_INCLS $LDP_CFLAGS"
+		LIBS="$LIBS $LDP_LIBS -lldp"
+
+		AC_DEFINE(HAVE_LDP_API, 1, [define if you have the LDP API])
+	else
+		AC_MSG_RESULT(no)
+
+		if test "$want_ldp" = yes; then
+	        	# User wanted LDP support but we couldn't find it.
+			AC_MSG_ERROR([LDP support requested with --with-ldp, but the LDP headers weren't found: make sure the LDP support is installed or don't request LDP support])
+		fi
+	fi
+fi
+
 dnl
 dnl Allow the user to enable remote capture.
 dnl It's off by default, as that increases the attack surface of
